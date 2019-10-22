@@ -65,7 +65,7 @@ func (fr *Frame) extend(grow int) {
 // stack top).
 func (fr *Frame) absindex(index int) int {
 	// zero, positive, or pseudo index
-	if index > 0 || isPseudoIndex(index) {
+	if index >= 0 || isPseudoIndex(index) {
 		return index
 	}
 	// negative
