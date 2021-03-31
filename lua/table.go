@@ -77,23 +77,48 @@ func newTable(state *State, arrayN, hashN int) *table {
 	return &t
 }
 
+// 如果最有一个元素是空，重新计算大小。末尾开始，连续为空的元素全部收缩
+func (t *table) rehash() {
+	l := len(t.list)
+	if l <= 0 {
+		return
+	}
+
+	shrinkCount := 0
+	for i := l - 1; i >= 0; i-- {
+		if !IsNone(t.list[i]) {
+			break
+		}
+		shrinkCount++
+	}
+	if shrinkCount > 0 {
+		t.list = t.list[:l-shrinkCount]
+	}
+}
+
 func (t *table) set(k, v Value) {
 	if IsNone(k) {
 		return
 	}
+	isNone := IsNone(v)
 	if n, ok := k.(Number); ok {
 		i := arrayIndex(n) - 1
 		if i >= 0 && i < len(t.list) {
 			t.list[i] = v
+			if isNone {
+				t.rehash()
+			}
 			return
 		}
 		if i == len(t.list) {
-			t.list = append(t.list, v)
+			if !isNone {
+				t.list = append(t.list, v)
+			}
 			return
 		}
 		// TODO: resize & rehash
 	}
-	if IsNone(v) {
+	if isNone {
 		delete(t.hash, k)
 		return
 	}

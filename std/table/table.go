@@ -2,6 +2,7 @@ package table
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/Azure/golua/lua"
@@ -162,24 +163,25 @@ func tableUnpack(state *lua.State) int {
 //
 // See https://www.lua.org/manual/5.3/manual.html#pdf-table.remove
 func tableRemove(state *lua.State) int {
-	// var (
-	// 	len = length(state, 1, opReadWrite)
-	// 	pos = state.OptInt(2, len)
-	// )
-	// if (pos != len) && (pos < 1 || pos >= len + 1) { // validate pos if given
-	// 	panic(fmt.Errorf("bad argument #2 to 'remove' (position out of bounds)"))
-	// }
-	// state.GetI(1, pos) // result = t[pos]
-	// for ; pos < len; pos++ {
-	// 	state.GetI(1, pos + 1)
-	// 	state.SetI(1, pos) // t[pos] = t[pos+1]
-	// }
-	// state.Push(nil)
-	// state.SetI(1, pos) // t[pos] = nil
-	// return 1
-	fmt.Println("table.remove")
-	state.Debug(true)
-	return 0
+	var (
+		len = length(state, 1, opReadWrite)
+		pos = state.OptInt(2, len)
+	)
+	if (pos != len) && (pos < 1 || pos >= len+1) { // validate pos if given
+		// panic(fmt.Errorf("bad argument #2 to 'remove' (position out of bounds)"))
+		return 0
+	}
+	fmt.Println("top", pos, state.Top())
+	state.GetIndex(1, pos) // result = t[pos]
+	for ; pos < len; pos++ {
+		state.GetIndex(1, pos+1)
+		state.SetIndex(1, pos) // t[pos] = t[pos+1]
+	}
+	state.Push(nil)
+	state.SetIndex(1, pos) // t[pos] = nil
+	fmt.Println("top", state.Top())
+
+	return 1
 }
 
 // table.move (a1, f, e, t [,a2])
@@ -193,9 +195,83 @@ func tableRemove(state *lua.State) int {
 //
 // See https://www.lua.org/manual/5.3/manual.html#pdf-table.move
 func tableMove(state *lua.State) int {
-	fmt.Println("table.move")
-	state.Debug(true)
-	return 0
+	f := state.CheckInt(2)
+	e := state.CheckInt(3)
+	t := state.CheckInt(4)
+	// 目标table
+	tt := int(state.OptInt(5, 1))
+	checkTable(state, 1, opRead)
+	checkTable(state, tt, opWrite)
+	if e >= f { // othervise, nothing to move
+		n := int64(0)
+		i := int64(0)
+		state.ArgCheck(f > 0 || e < lua.MaxInt+f, 3, "too many elements to move")
+		n = e - f + 1 /* number of elements to move */
+		state.ArgCheck(t <= lua.MaxInt-n+1, 4, "destination wrap around")
+
+		if t > e || t <= f || (tt != 1 && !state.Compare(lua.OpEq, 1, tt)) {
+			for i = 0; i < n; i++ {
+				state.GetIndex(1, f+i)
+				state.SetIndex(tt, t+i)
+			}
+		} else {
+			for i = n - 1; i >= 0; i-- {
+				state.GetIndex(1, f+i)
+				state.SetIndex(tt, t+i)
+			}
+		}
+	}
+
+	// return destination table
+	state.PushIndex(tt)
+	return 1
+}
+
+type tableSorter struct {
+	state *lua.State
+	len   int
+}
+
+func (ts *tableSorter) Len() int {
+	return ts.len
+}
+
+func (ts *tableSorter) Less(i, j int) bool {
+	i++
+	j++
+
+	// fmt.Println("less >>>", i, j, ts.state.TypeAt(1), ts.state.TypeAt(2))
+
+	if ts.state.IsNone(2) { /* no function? */
+		ts.state.GetIndex(1, int64(i))
+		// fmt.Println(">>> after get index", ts.state.CheckAny(-1))
+		ts.state.GetIndex(1, int64(j))
+		ret := ts.state.Compare(lua.OpLt, -2, -1)
+		ts.state.PopN(2)
+		return ret
+	}
+
+	ts.state.PushIndex(2) // push the comp function
+	ts.state.GetIndex(1, int64(i))
+	ts.state.GetIndex(1, int64(j))
+	err := ts.state.PCall(2, 1, 0) /* call function */
+	if err != nil {
+		ts.state.Errorf("pcall error:%s", err.Error())
+	}
+	res := ts.state.ToBool(-1) /* get result */
+	ts.state.Pop()             /* pop result */
+	return res
+}
+
+func (ts *tableSorter) Swap(i, j int) {
+	i++
+	j++
+
+	ts.state.GetIndex(1, int64(j))
+	ts.state.GetIndex(1, int64(i))
+
+	ts.state.SetIndex(1, int64(j))
+	ts.state.SetIndex(1, int64(i))
 }
 
 // table.sort (list [, comp])
@@ -215,8 +291,9 @@ func tableMove(state *lua.State) int {
 //
 // See https://www.lua.org/manual/5.3/manual.html#pdf-table.sort
 func tableSort(state *lua.State) int {
-	fmt.Println("table.sort")
-	state.Debug(true)
+	ts := tableSorter{state: state, len: int(length(state, 1, opReadWrite))}
+	sort.Sort(&ts)
+
 	return 0
 }
 

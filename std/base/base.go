@@ -489,7 +489,8 @@ func baseToNumber(state *lua.State) int {
 //
 // See https://www.lua.org/manual/5.3/manual.html#pdf-tostring
 func baseToString(state *lua.State) int {
-	state.CheckAny(1)
+	// None 也可以toString
+	// state.CheckAny(1)
 	state.Push(state.ToStringMeta(1))
 	return 1
 }

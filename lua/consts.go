@@ -60,3 +60,10 @@ const (
 	// Number of list items to accumulate before a SETLIST instruction.
 	FieldsPerFlush = 50
 )
+
+const (
+	MaxUint = uint64(^uint(0))
+	MinUint = uint64(0)
+	MaxInt  = int64(MaxUint >> 1)
+	MinInt  = -MaxInt - 1
+)

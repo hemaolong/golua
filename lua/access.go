@@ -165,6 +165,8 @@ func (state *State) ToStringMeta(index int) string {
 			state.Push(state.ToBool(index))
 		case NilType:
 			state.Push("nil")
+		case NoneType:
+			state.Push("none")
 		default:
 			var name string
 			tt := state.GetMetaField(index, "__name") // try __name
